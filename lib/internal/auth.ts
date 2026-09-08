@@ -23,9 +23,10 @@ export function canViewPrivateAssessments(profile: InternalProfile) {
 export async function getInternalUser() {
   const supabase = await createClient();
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-  const subject = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
+  const claims = claimsData?.claims ?? null;
+  const subject = typeof claims?.sub === "string" ? claims.sub : null;
 
-  if (claimsError || !subject) return null;
+  if (claimsError || !subject || !claims) return null;
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -37,7 +38,7 @@ export async function getInternalUser() {
 
   return {
     supabase,
-    claims: claimsData.claims,
+    claims,
     profile: profile as InternalProfile,
   };
 }
