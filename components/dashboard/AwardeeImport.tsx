@@ -83,7 +83,7 @@ export default function AwardeeImport() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Import gagal.");
-      setMessage(`${data.count} awardee berhasil disimpan. Nomor WhatsApp lengkap tidak disimpan; sistem hanya menyimpan hash 4 digit terakhir.`);
+      setMessage(`${data.count} awardee berhasil disimpan. Sistem menyimpan 4 digit terakhir dan hash verifikasi; nomor WhatsApp lengkap tidak disimpan.`);
       setRows([]);
       setFileName("");
       window.setTimeout(() => window.location.reload(), 900);
@@ -105,7 +105,7 @@ export default function AwardeeImport() {
       </div>
       <div className={styles.help}>
         Kolom yang dikenali: <b>nama/full_name</b>, kampus, jurusan/prodi, angkatan, wilayah/cabang, external_id, dan <b>whatsapp/no_wa</b>.
-        Nomor WA boleh berupa nomor lengkap atau 4 digit terakhir. Nomor lengkap hanya diproses di server untuk mengambil 4 digit terakhir dan tidak disimpan.
+        Nomor WA boleh berupa nomor lengkap atau minimal 4 digit. Nomor lengkap hanya diproses di server; yang disimpan adalah 4 digit terakhir dan hash verifikasi.
         Maksimal 500 baris per import.
       </div>
       {fileName && <div className={styles.help}>File: {fileName} · {validRows.length}/{rows.length} baris siap.</div>}
@@ -119,7 +119,7 @@ export default function AwardeeImport() {
               {rows.slice(0, 6).map((row, index) => (
                 <tr key={`${row.externalId}-${row.fullName}-${index}`}>
                   <td>{row.fullName}</td><td>{row.campus || "—"}</td><td>{row.major || "—"}</td><td>{row.cohort || "—"}</td><td>{row.region || "—"}</td>
-                  <td>{row.whatsapp.replace(/\D/g, "").length >= 4 ? "Siap" : "WA kurang dari 4 digit"}</td>
+                  <td>{row.whatsapp.replace(/\D/g, "").length >= 4 ? `•••• ${row.whatsapp.replace(/\D/g, "").slice(-4)}` : "WA kurang dari 4 digit"}</td>
                 </tr>
               ))}
             </tbody>
