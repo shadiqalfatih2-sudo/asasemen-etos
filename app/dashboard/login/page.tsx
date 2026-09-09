@@ -14,7 +14,7 @@ export default async function FacilitatorLoginPage() {
     <main className="login-shell">
       <section className="login-card">
         <Link href="/" className="brand-mark" aria-label="ETOS Assessment Center">
-          <Image className="brand-logo brand-logo-login" src="/etos-logo.png" alt="ETOS" width={178} height={56} priority />
+          <Image className="brand-logo brand-logo-login" src="/etos-logo.webp" alt="ETOS" width={178} height={56} priority />
           <small>Assessment Center</small>
         </Link>
         <div>

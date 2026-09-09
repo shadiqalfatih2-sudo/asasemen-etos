@@ -8,7 +8,7 @@ export default function HomePage() {
       <section className="hero-shell">
         <nav className="nav-wrap">
           <Link href="/" className="brand-mark" aria-label="ETOS Assessment Center">
-            <Image className="brand-logo" src="/etos-logo.png" alt="ETOS" width={168} height={53} priority />
+            <Image className="brand-logo" src="/etos-logo.webp" alt="ETOS" width={168} height={53} priority />
             <small>Assessment Center</small>
           </Link>
           <Link className="ghost-button" href="/dashboard/login">Login Fasilitator</Link>

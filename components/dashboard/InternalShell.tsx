@@ -17,7 +17,7 @@ export default function InternalShell({
     <main className={styles.shell}>
       <header className={styles.topbar}>
         <Link href="/dashboard" className={styles.brand} aria-label="ETOS Assessment Center">
-          <Image className={styles.brandLogo} src="/etos-logo.png" alt="ETOS" width={136} height={43} priority />
+          <Image className={styles.brandLogo} src="/etos-logo.webp" alt="ETOS" width={136} height={43} priority />
           <small>Assessment Center</small>
         </Link>
         <div className={styles.user}>
