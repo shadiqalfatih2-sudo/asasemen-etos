@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { InternalProfile } from "@/lib/internal/auth";
@@ -9,14 +10,14 @@ export default function InternalShell({
   children,
 }: {
   profile: InternalProfile;
-  active: "overview" | "awardees" | "assessment";
+  active: "overview" | "awardees" | "assessments" | "assessment";
   children?: ReactNode;
 }) {
   return (
     <main className={styles.shell}>
       <header className={styles.topbar}>
-        <Link href="/dashboard" className={styles.brand}>
-          <span className={styles.brandMark}>ETOS</span>
+        <Link href="/dashboard" className={styles.brand} aria-label="ETOS Assessment Center">
+          <Image className={styles.brandLogo} src="/etos-logo.png" alt="ETOS" width={136} height={43} priority />
           <small>Assessment Center</small>
         </Link>
         <div className={styles.user}>
@@ -34,7 +35,8 @@ export default function InternalShell({
           <nav className={styles.nav}>
             <Link className={active === "overview" ? styles.active : ""} href="/dashboard">Overview</Link>
             <Link className={active === "awardees" ? styles.active : ""} href="/dashboard/awardees">Awardee</Link>
-            <Link className={active === "assessment" ? styles.active : ""} href="/assessment">Portal Assessment</Link>
+            <Link className={active === "assessments" ? styles.active : ""} href="/dashboard/assessments">Assessment</Link>
+            <Link className={active === "assessment" ? styles.active : ""} href="/assessment">Portal Awardee</Link>
           </nav>
         </aside>
         <section className={styles.content}>{children}</section>

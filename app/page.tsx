@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { ASSESSMENT_MODULES } from "@/lib/assessment/questions";
 
@@ -6,7 +7,10 @@ export default function HomePage() {
     <main>
       <section className="hero-shell">
         <nav className="nav-wrap">
-          <div className="brand-mark"><span>ETOS</span><small>Assessment Center</small></div>
+          <Link href="/" className="brand-mark" aria-label="ETOS Assessment Center">
+            <Image className="brand-logo" src="/etos-logo.png" alt="ETOS" width={168} height={53} priority />
+            <small>Assessment Center</small>
+          </Link>
           <Link className="ghost-button" href="/dashboard/login">Login Fasilitator</Link>
         </nav>
 
