@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const { data: awardee, error: awardeeError } = await admin
       .from("awardees")
-      .select("id,full_name,phone_last4_hash,status")
+      .select("id,full_name,phone_last4,phone_last4_hash,status")
       .eq("id", awardeeId)
       .eq("status", "active")
       .maybeSingle();
@@ -48,12 +48,13 @@ export async function POST(request: NextRequest) {
     if (awardeeError || !awardee) {
       return NextResponse.json({ error: "Data awardee tidak ditemukan." }, { status: 404 });
     }
-    if (!awardee.phone_last4_hash) {
-      return NextResponse.json({ error: "Verifikasi WhatsApp awardee ini belum dikonfigurasi. Hubungi fasilitator." }, { status: 409 });
-    }
 
     const suppliedHash = hashLast4(last4);
-    if (!safeHashEqual(suppliedHash, awardee.phone_last4_hash)) {
+    const verified = awardee.phone_last4_hash
+      ? safeHashEqual(suppliedHash, awardee.phone_last4_hash)
+      : awardee.phone_last4 === last4;
+
+    if (!verified) {
       await admin.from("audit_logs").insert({
         action: "awardee.verify_failed",
         resource_type: "awardee",
@@ -61,6 +62,14 @@ export async function POST(request: NextRequest) {
         metadata: { client_hash: clientHash },
       });
       return NextResponse.json({ error: "4 digit terakhir WhatsApp tidak sesuai." }, { status: 401 });
+    }
+
+    if (!awardee.phone_last4_hash) {
+      const { error: backfillError } = await admin
+        .from("awardees")
+        .update({ phone_last4_hash: suppliedHash, updated_at: new Date().toISOString() })
+        .eq("id", awardee.id);
+      if (backfillError) console.warn("awardee hash bootstrap failed", backfillError);
     }
 
     const { data: period, error: periodError } = await admin
