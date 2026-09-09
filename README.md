@@ -27,7 +27,7 @@ Repo ini adalah project baru dan berdiri sendiri. Jangan memakai database, envir
 - [x] Jawaban detail selected / unselected
 - [x] Pendampingan, action plan, deadline, dan histori
 - [x] Audit log
-- [x] Branding logo ETOS transparan + favicon
+- [x] Branding logo ETOS transparan WebP + favicon PNG
 
 ## Security notes
 Nomor WhatsApp lengkap tidak disimpan. Sistem hanya menyimpan hash verifikasi dan 4 digit terakhir untuk tampilan internal. Jawaban sensitif dan coaching signals dibatasi oleh Row Level Security dan permission `assessment.view_private`.
