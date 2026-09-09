@@ -20,6 +20,10 @@ export function canViewPrivateAssessments(profile: InternalProfile) {
   return profile.role === "superadmin" || profile.permissions.includes("assessment.view_private");
 }
 
+export function canExportAssessments(profile: InternalProfile) {
+  return profile.role === "superadmin" || profile.permissions.includes("assessment.export");
+}
+
 export async function getInternalUser() {
   const supabase = await createClient();
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();

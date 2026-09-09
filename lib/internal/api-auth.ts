@@ -2,7 +2,14 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 
-export async function authorizeAssessmentManager() {
+type ApiProfile = {
+  id: string;
+  role: "superadmin" | "coordinator" | "facilitator";
+  permissions: string[];
+  is_active: boolean;
+};
+
+async function getApiActor() {
   const supabase = await createClient();
   const { data: claimsData, error } = await supabase.auth.getClaims();
   const subject = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
@@ -11,25 +18,56 @@ export async function authorizeAssessmentManager() {
     return { ok: false as const, status: 401, error: "Login diperlukan." };
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: rawProfile, error: profileError } = await supabase
     .from("profiles")
     .select("id,role,permissions,is_active")
     .eq("id", subject)
     .maybeSingle();
 
-  if (profileError || !profile?.is_active) {
+  if (profileError || !rawProfile?.is_active) {
     return { ok: false as const, status: 403, error: "Akun internal tidak aktif." };
   }
 
-  const permissions = Array.isArray(profile.permissions) ? profile.permissions : [];
+  const profile = {
+    ...rawProfile,
+    permissions: Array.isArray(rawProfile.permissions) ? rawProfile.permissions : [],
+  } as ApiProfile;
+
+  return { ok: true as const, actorId: subject, supabase, profile };
+}
+
+export async function authorizeAssessmentManager() {
+  const auth = await getApiActor();
+  if (!auth.ok) return auth;
+
   const allowed =
-    profile.role === "superadmin" ||
-    profile.role === "coordinator" ||
-    permissions.includes("assessment.manage");
+    auth.profile.role === "superadmin" ||
+    auth.profile.role === "coordinator" ||
+    auth.profile.permissions.includes("assessment.manage");
 
   if (!allowed) {
-    return { ok: false as const, status: 403, error: "Akun tidak memiliki izin mengelola awardee." };
+    return { ok: false as const, status: 403, error: "Akun tidak memiliki izin mengelola assessment." };
   }
 
-  return { ok: true as const, actorId: subject };
+  return auth;
+}
+
+export async function authorizeAssessmentExporter() {
+  const auth = await getApiActor();
+  if (!auth.ok) return auth;
+
+  const allowed =
+    auth.profile.role === "superadmin" ||
+    auth.profile.permissions.includes("assessment.export");
+
+  if (!allowed) {
+    return { ok: false as const, status: 403, error: "Akun tidak memiliki izin mengekspor laporan assessment." };
+  }
+
+  return {
+    ...auth,
+    mayViewPrivate:
+      auth.profile.role === "superadmin" ||
+      auth.profile.permissions.includes("assessment.view_private"),
+  };
 }

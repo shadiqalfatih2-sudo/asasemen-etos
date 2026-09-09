@@ -3,11 +3,11 @@ import { notFound } from "next/navigation";
 import InternalShell from "@/components/dashboard/InternalShell";
 import FollowupManager from "@/components/dashboard/FollowupManager";
 import styles from "@/components/dashboard/AwardeeDetail.module.css";
-import { canManageAssessments, canViewPrivateAssessments, requireInternalUser } from "@/lib/internal/auth";
+import { canExportAssessments, canManageAssessments, canViewPrivateAssessments, requireInternalUser } from "@/lib/internal/auth";
 
 export const dynamic = "force-dynamic";
 
-const TABS = ["overview", "answers", "analysis", "followup", "history"] as const;
+const TABS = ["overview", "answers", "analysis", "followup", "history", "documents"] as const;
 type Tab = (typeof TABS)[number];
 type SessionRow = { id: string; period_id: string; status: "in_progress" | "completed" | "expired"; started_at: string; completed_at: string | null; last_activity_at: string };
 type PeriodRow = { id: string; name: string; academic_year: string; semester: number };
@@ -15,6 +15,7 @@ type QuestionRow = { id: string; code: string; statement: string; dimension: str
 type AnswerRow = { question_id: string; selected: boolean; updated_at: string };
 type SignalRow = { id: string; signal_code: string; title: string; severity: "info" | "review" | "priority"; is_resolved: boolean; created_at: string };
 type FollowupRow = { id: string; category: string; signal: string | null; notes: string | null; action_plan: string | null; deadline: string | null; status: "open" | "in_progress" | "done" | "cancelled"; created_at: string };
+type DocumentRow = { id: string; document_type: "raw_answers" | "comprehensive_report"; classification: string; generated_at: string; session_id: string | null };
 type ScoreItem = { code?: string; label?: string; score?: number; level?: string; sensitivity?: string };
 type ResultRow = { session_id: string; summary: { character_top?: ScoreItem[]; note?: string } | null; dimensions: Record<string, ScoreItem> | null; career_orientation: { top_three?: ScoreItem[]; career_tracks?: ScoreItem[]; values?: ScoreItem[]; clarity?: ScoreItem | null; exploration?: ScoreItem | null } | null; scoring_version: string; generated_at: string };
 
@@ -29,6 +30,7 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
   const { supabase, profile } = await requireInternalUser();
   const mayViewPrivate = canViewPrivateAssessments(profile);
   const mayManage = canManageAssessments(profile);
+  const mayExport = canExportAssessments(profile);
 
   const { data: awardee } = await supabase.from("awardees").select("id,external_id,full_name,campus,major,cohort,region,status,phone_last4,created_at").eq("id", id).maybeSingle();
   if (!awardee) notFound();
@@ -40,6 +42,7 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
   const sessions = (sessionData ?? []) as SessionRow[];
   const followups = (followupData ?? []) as FollowupRow[];
   const latestSession = sessions[0] ?? null;
+  const latestCompletedSession = sessions.find((item) => item.status === "completed") ?? null;
   const periodIds = [...new Set(sessions.map((item) => item.period_id))];
   const { data: periodData } = periodIds.length ? await supabase.from("assessment_periods").select("id,name,academic_year,semester").in("id", periodIds) : { data: [] };
   const periods = (periodData ?? []) as PeriodRow[];
@@ -47,11 +50,11 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
 
   let result: ResultRow | null = null;
   let signals: SignalRow[] = [];
-  if (latestSession?.status === "completed") {
-    const { data } = await supabase.from("assessment_results").select("session_id,summary,dimensions,career_orientation,scoring_version,generated_at").eq("session_id", latestSession.id).maybeSingle();
+  if (latestCompletedSession) {
+    const { data } = await supabase.from("assessment_results").select("session_id,summary,dimensions,career_orientation,scoring_version,generated_at").eq("session_id", latestCompletedSession.id).maybeSingle();
     result = data as ResultRow | null;
     if (mayViewPrivate) {
-      const { data: signalData } = await supabase.from("assessment_signals").select("id,signal_code,title,severity,is_resolved,created_at").eq("session_id", latestSession.id).order("created_at", { ascending: true });
+      const { data: signalData } = await supabase.from("assessment_signals").select("id,signal_code,title,severity,is_resolved,created_at").eq("session_id", latestCompletedSession.id).order("created_at", { ascending: true });
       signals = (signalData ?? []) as SignalRow[];
     }
   }
@@ -72,6 +75,12 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
         moduleMap = new Map((moduleData ?? []).map((item) => [item.id, item.title]));
       }
     }
+  }
+
+  let documents: DocumentRow[] = [];
+  if (tab === "documents" && mayExport) {
+    const { data } = await supabase.from("generated_documents").select("id,document_type,classification,generated_at,session_id").eq("awardee_id", id).order("generated_at", { ascending: false }).limit(30);
+    documents = (data ?? []) as DocumentRow[];
   }
 
   const answerMap = new Map(answers.map((item) => [item.question_id, item]));
@@ -95,11 +104,12 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
         <Link data-active={tab === "analysis" ? "true" : "false"} href={`/dashboard/awardees/${id}?tab=analysis`}>Analisis</Link>
         <Link data-active={tab === "followup" ? "true" : "false"} href={`/dashboard/awardees/${id}?tab=followup`}>Pendampingan</Link>
         <Link data-active={tab === "history" ? "true" : "false"} href={`/dashboard/awardees/${id}?tab=history`}>Histori</Link>
+        <Link data-active={tab === "documents" ? "true" : "false"} href={`/dashboard/awardees/${id}?tab=documents`}>Dokumen</Link>
       </nav>
 
       {tab === "overview" && <>
         <div className={styles.grid3}><article className={styles.statCard}><span>STATUS</span><strong>{latestSession?.status === "completed" ? "Selesai" : latestSession?.status === "in_progress" ? "Berjalan" : "—"}</strong><small>{latestPeriod?.name || "Belum ada sesi"}</small></article><article className={styles.statCard}><span>PENDAMPINGAN</span><strong>{activeFollowups}</strong><small>tindak lanjut aktif</small></article><article className={styles.statCard}><span>TERAKHIR AKTIF</span><strong>{latestSession ? date(latestSession.last_activity_at) : "—"}</strong><small>{sessions.length} histori sesi</small></article></div>
-        {latestSession?.status === "completed" && result ? <div className={styles.analysisLead}><section className={styles.sectionCard}><div className={styles.sectionTitle}><div><span>KEKUATAN MENONJOL</span><h2>Profil reflektif</h2></div></div><div className={styles.topList}>{characterTop.slice(0, 4).map((item) => <div className={styles.topItem} key={item.code}><strong>{item.label || item.code}</strong><span>{item.score ?? 0}%</span></div>)}</div></section><section className={styles.sectionCard}><div className={styles.sectionTitle}><div><span>ARAH MINAT</span><h2>Top orientasi</h2></div></div><div className={styles.topList}>{careerTop.slice(0, 3).map((item) => <div className={styles.topItem} key={item.code}><strong>{item.label || item.code}</strong><span>{item.score ?? 0}%</span></div>)}</div></section></div> : <div className={styles.sectionCard}><div className={styles.emptyState}>Analisis akan tersedia setelah assessment 92 item selesai.</div></div>}
+        {latestCompletedSession && result ? <div className={styles.analysisLead}><section className={styles.sectionCard}><div className={styles.sectionTitle}><div><span>KEKUATAN MENONJOL</span><h2>Profil reflektif</h2></div></div><div className={styles.topList}>{characterTop.slice(0, 4).map((item) => <div className={styles.topItem} key={item.code}><strong>{item.label || item.code}</strong><span>{item.score ?? 0}%</span></div>)}</div></section><section className={styles.sectionCard}><div className={styles.sectionTitle}><div><span>ARAH MINAT</span><h2>Top orientasi</h2></div></div><div className={styles.topList}>{careerTop.slice(0, 3).map((item) => <div className={styles.topItem} key={item.code}><strong>{item.label || item.code}</strong><span>{item.score ?? 0}%</span></div>)}</div></section></div> : <div className={styles.sectionCard}><div className={styles.emptyState}>Analisis akan tersedia setelah assessment 92 item selesai.</div></div>}
       </>}
 
       {tab === "answers" && <section className={styles.sectionCard}>
@@ -117,6 +127,14 @@ export default async function AwardeeDetailPage({ params, searchParams }: { para
 
       {tab === "followup" && <FollowupManager awardeeId={id} followups={followups} sessions={sessions.map((session) => ({ id: session.id, label: `${periodMap.get(session.period_id)?.name || "Assessment"} · ${date(session.started_at)}` }))} mayManage={mayManage} />}
       {tab === "history" && <section className={styles.sectionCard}><div className={styles.sectionTitle}><div><span>ASSESSMENT HISTORY</span><h2>Histori Assessment</h2></div><b>{sessions.length} sesi</b></div>{sessions.length ? <div className={styles.history}>{sessions.map((session) => { const period = periodMap.get(session.period_id); return <article className={styles.historyItem} key={session.id}><div><strong>{period?.name || "Assessment ETOS"}</strong><p>{period ? `${period.academic_year} · Semester ${period.semester}` : ""} · mulai {date(session.started_at)}{session.completed_at ? ` · selesai ${date(session.completed_at)}` : ""}</p></div><span data-status={session.status}>{session.status === "completed" ? "Selesai" : session.status === "in_progress" ? "Berjalan" : "Expired"}</span></article>; })}</div> : <div className={styles.emptyState}>Belum ada histori assessment.</div>}</section>}
+
+      {tab === "documents" && <section className={styles.sectionCard}>
+        <div className={styles.sectionTitle}><div><span>SECURE DOCUMENTS</span><h2>Dokumen Assessment</h2></div>{mayExport && <b>PDF aktif</b>}</div>
+        {!mayExport ? <div className={styles.noticePrivate}><strong>AKSES EKSPOR DIBATASI</strong>Dokumen PDF hanya tersedia untuk akun dengan permission assessment.export.</div> : latestCompletedSession ? <>
+          <div className={styles.documentGrid}><a className={styles.documentAction} href={`/api/dashboard/reports/${id}/raw`}><span>RAW ANSWERS</span><strong>Unduh Jawaban Lengkap</strong><p>Daftar item dipilih/tidak dipilih. Item privat mengikuti permission akun.</p><b>PDF →</b></a><a className={styles.documentAction} href={`/api/dashboard/reports/${id}/comprehensive`}><span>COMPREHENSIVE</span><strong>Unduh Laporan Komprehensif</strong><p>Profil, dimensi, RIASEC, jalur karier, pendampingan, dan signal sesuai hak akses.</p><b>PDF →</b></a></div>
+          <div className={styles.documentHistory}><h3>Riwayat Generate / Download</h3>{documents.length ? documents.map((document) => <div className={styles.documentRow} key={document.id}><div><strong>{document.document_type === "raw_answers" ? "Raw Answers" : "Comprehensive Report"}</strong><small>{date(document.generated_at)} · {document.classification}</small></div><span>{document.session_id === latestCompletedSession.id ? "assessment terbaru" : "histori"}</span></div>) : <div className={styles.emptyState}>Belum ada riwayat dokumen. Riwayat tercatat otomatis setiap PDF dibuat.</div>}</div>
+        </> : <div className={styles.emptyState}>Dokumen tersedia setelah assessment selesai.</div>}
+      </section>}
     </InternalShell>
   );
 }

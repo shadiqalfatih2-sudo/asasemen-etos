@@ -10,7 +10,7 @@ export default function InternalShell({
   children,
 }: {
   profile: InternalProfile;
-  active: "overview" | "awardees" | "assessments" | "assessment";
+  active: "overview" | "awardees" | "assessments" | "reports" | "settings" | "assessment";
   children?: ReactNode;
 }) {
   return (
@@ -36,6 +36,8 @@ export default function InternalShell({
             <Link className={active === "overview" ? styles.active : ""} href="/dashboard">Overview</Link>
             <Link className={active === "awardees" ? styles.active : ""} href="/dashboard/awardees">Awardee</Link>
             <Link className={active === "assessments" ? styles.active : ""} href="/dashboard/assessments">Assessment</Link>
+            <Link className={active === "reports" ? styles.active : ""} href="/dashboard/reports">Laporan</Link>
+            <Link className={active === "settings" ? styles.active : ""} href="/dashboard/settings">Pengaturan</Link>
             <Link className={active === "assessment" ? styles.active : ""} href="/assessment">Portal Awardee</Link>
           </nav>
         </aside>
