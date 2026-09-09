@@ -14,30 +14,32 @@ Web asesmen dan development awardee ETOS.
 ## Project boundary
 Repo ini adalah project baru dan berdiri sendiri. Jangan memakai database, environment variables, atau project Vercel ETOS lama.
 
+## Current implementation
+- [x] Supabase project khusus ETOS Assessment Center
+- [x] Database schema + RLS + security hardening
+- [x] 3 modul / 92 pertanyaan
+- [x] Verifikasi awardee menggunakan 4 digit terakhir WhatsApp
+- [x] Autosave assessment + offline recovery
+- [x] Manajemen awardee manual dan import CSV
+- [x] Dashboard internal dan monitor assessment
+- [x] Scoring profil reflektif dan orientasi karier
+- [x] Private coaching signals dengan akses terbatas
+- [x] Jawaban detail selected / unselected
+- [x] Pendampingan, action plan, deadline, dan histori
+- [x] Audit log
+- [x] Branding logo ETOS transparan + favicon
+
+## Security notes
+Nomor WhatsApp lengkap tidak disimpan. Sistem hanya menyimpan hash verifikasi dan 4 digit terakhir untuk tampilan internal. Jawaban sensitif dan coaching signals dibatasi oleh Row Level Security dan permission `assessment.view_private`.
+
+`SUPABASE_SECRET_KEY` hanya boleh tersedia pada server/Vercel dan tidak boleh dikirim ke browser.
+
 ## Local setup
-1. Salin `.env.example` menjadi `.env.local`.
-2. Isi URL dan publishable key dari Supabase project **ETOS Assessment Center** yang baru.
-3. Isi `SUPABASE_SECRET_KEY` hanya di environment server/Vercel; jangan pernah memakai key ini di komponen client.
-4. Jalankan migration di `supabase/migrations/` berurutan.
-5. `npm install && npm run dev`.
+1. Jalankan `npm install`.
+2. Sediakan `SUPABASE_SECRET_KEY` pada environment server lokal jika menguji endpoint server yang membutuhkan akses admin.
+3. Jalankan `npm run dev`.
 
-## Current phase
-### Fase A — Infrastructure & Security Foundation
-- [x] Next.js foundation
-- [x] Supabase SSR clients
-- [x] Premium ETOS landing page
-- [x] 3 module definitions + 92 existing questions
-- [ ] New Supabase project connection
-- [ ] Database migration execution
-- [ ] Security advisor check
-- [ ] Vercel import (user will import this GitHub repo)
-
-## Environment variables
-```env
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SECRET_KEY=
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-Never expose `SUPABASE_SECRET_KEY` in browser code.
+## Production
+GitHub: `shadiqalfatih2-sudo/asasemen-etos`  
+Vercel project: `asasemen-etosidpalu`  
+Supabase project: `ETOS Assessment Center`
