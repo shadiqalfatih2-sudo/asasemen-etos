@@ -4,47 +4,50 @@ import { ASSESSMENT_MODULES } from "@/lib/assessment/questions";
 
 export default function HomePage() {
   return (
-    <main>
+    <main className="site-home">
       <section className="hero-shell">
         <nav className="nav-wrap">
-          <Link href="/" className="brand-mark" aria-label="ETOS Assessment Center">
-            <Image className="brand-logo" src="/etos-logo.webp" alt="ETOS" width={168} height={53} priority />
+          <Link href="/" className="brand-mark brand-mark-light" aria-label="ETOS Assessment Center">
+            <Image className="brand-logo brand-logo-light" src="/etos-logo.webp" alt="ETOS" width={168} height={53} priority />
             <small>Assessment Center</small>
           </Link>
-          <Link className="ghost-button" href="/dashboard/login">Login Fasilitator</Link>
+          <div className="nav-links"><a href="#alur">Cara kerja</a><a href="#privasi">Privasi</a></div>
+          <div className="nav-actions"><Link className="nav-login" href="/dashboard/login">Login</Link><Link className="nav-start" href="/assessment">Mulai</Link></div>
         </nav>
 
-        <div className="hero-grid">
-          <div className="hero-copy">
-            <span className="eyebrow">AWARDEE DEVELOPMENT ASSESSMENT</span>
-            <h1>Kenali dirimu.<br />Pahami kondisimu.<br /><em>Tentukan arahmu.</em></h1>
-            <p>Assessment perkembangan awardee ETOS untuk membantu proses pengembangan diri dan pendampingan yang lebih personal.</p>
-            <div className="hero-actions">
-              <Link className="primary-button" href="/assessment">Mulai Assessment <span>→</span></Link>
-              <span className="privacy-note">Aman · Privat · Pendampingan terarah</span>
-            </div>
+        <div className="hero-stage">
+          <div className="hero-note">
+            <span>ETOS AWARDEE DEVELOPMENT</span>
+            <p>Ruang refleksi terarah untuk memahami diri, melihat pola perkembangan, dan menentukan langkah berikutnya.</p>
           </div>
+          <div className="hero-cta">
+            <h2>Tiga modul. Satu perjalanan yang lebih jelas.</h2>
+            <Link href="/assessment">Mulai assessment</Link>
+          </div>
+        </div>
 
-          <div className="journey-card">
-            <div className="journey-top"><span>Perjalanan refleksi</span><strong>3 Modul</strong></div>
-            <div className="module-list">
-              {ASSESSMENT_MODULES.map((module, index) => (
-                <div className="module-row" key={module.code}>
-                  <div className="module-number">0{index + 1}</div>
-                  <div><strong>{module.title}</strong><p>{module.question}</p></div>
-                  <span>{module.items.length} item</span>
-                </div>
-              ))}
-            </div>
-            <div className="journey-footer"><span>92 pernyataan reflektif</span><span>Autosave</span></div>
-          </div>
+        <div className="hero-display">
+          <h1>KENALI DIRI.<br /><em>TENTUKAN ARAH.</em></h1>
+        </div>
+
+        <div className="hero-modules" id="alur">
+          {ASSESSMENT_MODULES.map((module, index) => (
+            <article key={module.code}>
+              <span>0{index + 1}</span>
+              <div><strong>{module.title}</strong><p>{module.question}</p></div>
+              <small>{module.items.length} pernyataan</small>
+            </article>
+          ))}
         </div>
       </section>
 
-      <section className="principles">
-        <article><span>01</span><h2>Reflektif, bukan menghakimi</h2><p>Hasil asesmen menjadi bahan percakapan pengembangan, bukan label psikologis.</p></article>
-        <article><span>02</span><h2>Privasi sebagai default</h2><p>Jawaban sensitif hanya dapat dilihat oleh peran yang memiliki izin khusus.</p></article>
-        <article><span>03</span><h2>Dari insight ke tindak lanjut</h2><p>Temuan asesmen terhubung dengan catatan pendampingan dan rencana aksi.</p></article>
+      <section className="principles" id="privasi">
+        <div className="principles-intro"><span>ASSESSMENT CENTER</span><h2>Refleksi yang tenang, privat, dan bisa ditindaklanjuti.</h2></div>
+        <div className="principles-grid">
+          <article><span>01</span><h3>Bukan label</h3><p>Hasil digunakan sebagai bahan percakapan pengembangan, bukan diagnosis atau penilaian psikologis.</p></article>
+          <article><span>02</span><h3>Privasi lebih dulu</h3><p>Jawaban sensitif hanya tersedia untuk pendamping yang memiliki kewenangan khusus.</p></article>
+          <article><span>03</span><h3>Progres aman</h3><p>Jawaban tersimpan otomatis, dapat ditinjau kembali, dan bisa diperbaiki sebelum assessment diselesaikan.</p></article>
+        </div>
       </section>
     </main>
   );

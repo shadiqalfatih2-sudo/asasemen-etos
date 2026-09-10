@@ -7,7 +7,7 @@ type Awardee = { id: string; full_name: string; campus?: string | null; major?: 
 type Question = { id: string; code: string; statement: string; dimension: string; sort_order: number; sensitivity: "standard" | "private" | "signal" };
 type Module = { id: string; code: string; title: string; subtitle?: string | null; reflection_question?: string | null; sort_order: number; is_restricted: boolean; questions: Question[] };
 type SessionPayload = {
-  session: { status: "in_progress" | "completed" | "expired"; completedAt?: string | null };
+  session: { id: string; status: "in_progress" | "completed" | "expired"; completedAt?: string | null };
   awardee: Awardee;
   period: { id: string; name: string; academic_year: string; semester: number };
   modules: Module[];
@@ -17,23 +17,44 @@ type SessionPayload = {
 
 type AnswerChange = { questionId: string; selected: boolean };
 type SaveState = "idle" | "saving" | "saved" | "offline";
-const PAGE_SIZE = 8;
-const SAVE_DEBOUNCE_MS = 550;
-const PENDING_KEY = "etos_assessment_pending_v2";
 
-function readPending(): AnswerChange[] {
+const PAGE_SIZE = 8;
+const SAVE_DEBOUNCE_MS = 500;
+const PENDING_PREFIX = "etos_assessment_pending_v3:";
+
+function pendingKey(sessionId: string) {
+  return `${PENDING_PREFIX}${sessionId}`;
+}
+
+function readPending(sessionId: string): AnswerChange[] {
   if (typeof window === "undefined") return [];
   try {
-    const parsed = JSON.parse(localStorage.getItem(PENDING_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item.questionId === "string" && typeof item.selected === "boolean") : [];
+    const parsed = JSON.parse(localStorage.getItem(pendingKey(sessionId)) || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => item && typeof item.questionId === "string" && typeof item.selected === "boolean")
+      : [];
   } catch {
     return [];
   }
 }
 
-function writePending(items: AnswerChange[]) {
+function writePending(sessionId: string, items: AnswerChange[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PENDING_KEY, JSON.stringify(items));
+  localStorage.setItem(pendingKey(sessionId), JSON.stringify(items));
+}
+
+function clearPending(sessionId: string) {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(pendingKey(sessionId));
+}
+
+function clearStalePending(activeSessionId?: string) {
+  if (typeof window === "undefined") return;
+  const activeKey = activeSessionId ? pendingKey(activeSessionId) : null;
+  for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+    const key = localStorage.key(index);
+    if (key?.startsWith(PENDING_PREFIX) && key !== activeKey) localStorage.removeItem(key);
+  }
 }
 
 function mergeAnswerChanges(...groups: AnswerChange[][]) {
@@ -59,14 +80,14 @@ export default function AssessmentApp() {
   const [pageIndex, setPageIndex] = useState(0);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const queuedRef = useRef<Map<string, AnswerChange>>(new Map());
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queuedRef = useRef<Map<string, AnswerChange>>(new Map());
 
   const moveToFirstIncomplete = useCallback((payload: SessionPayload, ids: Set<string>) => {
-    for (let m = 0; m < payload.modules.length; m += 1) {
-      const questionIndex = payload.modules[m].questions.findIndex((question) => !ids.has(question.id));
+    for (let modulePosition = 0; modulePosition < payload.modules.length; modulePosition += 1) {
+      const questionIndex = payload.modules[modulePosition].questions.findIndex((question) => !ids.has(question.id));
       if (questionIndex >= 0) {
-        setModuleIndex(m);
+        setModuleIndex(modulePosition);
         setPageIndex(Math.floor(questionIndex / PAGE_SIZE));
         return;
       }
@@ -78,16 +99,23 @@ export default function AssessmentApp() {
   }, []);
 
   const hydrateWorkspace = useCallback((payload: SessionPayload) => {
+    clearStalePending(payload.session.id);
     const nextAnswers: Record<string, boolean> = {};
     const nextAnswered = new Set<string>();
+
     for (const answer of payload.answers || []) {
       nextAnswers[answer.questionId] = answer.selected;
       nextAnswered.add(answer.questionId);
     }
+    for (const pending of readPending(payload.session.id)) {
+      nextAnswers[pending.questionId] = pending.selected;
+      nextAnswered.add(pending.questionId);
+    }
+
     setWorkspace(payload);
     setAnswers(nextAnswers);
     setAnsweredIds(nextAnswered);
-    moveToFirstIncomplete(payload, nextAnswered);
+    if (payload.session.status !== "completed") moveToFirstIncomplete(payload, nextAnswered);
     setStage(payload.session.status === "completed" ? "complete" : "workspace");
   }, [moveToFirstIncomplete]);
 
@@ -112,6 +140,7 @@ export default function AssessmentApp() {
       const [sessionResult, awardeeResult] = await Promise.allSettled([loadSession(), loadAwardees()]);
       if (!active) return;
       if (sessionResult.status === "fulfilled" && sessionResult.value) return;
+      clearStalePending();
       if (awardeeResult.status === "rejected") setError(awardeeResult.reason instanceof Error ? awardeeResult.reason.message : "Data awardee belum dapat dimuat.");
       setStage("select");
     })();
@@ -119,9 +148,11 @@ export default function AssessmentApp() {
   }, [loadAwardees, loadSession]);
 
   const persistAnswers = useCallback(async (items: AnswerChange[]) => {
+    const sessionId = workspace?.session.id;
     const deduped = mergeAnswerChanges(items);
-    if (!deduped.length) return true;
+    if (!sessionId || !deduped.length) return true;
     setSaveState("saving");
+
     try {
       for (let index = 0; index < deduped.length; index += 50) {
         const chunk = deduped.slice(index, index + 50);
@@ -133,18 +164,19 @@ export default function AssessmentApp() {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Gagal menyimpan jawaban.");
       }
+
       const savedIds = new Set(deduped.map((item) => item.questionId));
-      writePending(readPending().filter((item) => !savedIds.has(item.questionId)));
+      writePending(sessionId, readPending(sessionId).filter((item) => !savedIds.has(item.questionId)));
       setSaveState("saved");
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
-      idleTimerRef.current = setTimeout(() => setSaveState("idle"), 1500);
+      idleTimerRef.current = setTimeout(() => setSaveState("idle"), 1400);
       return true;
     } catch {
-      writePending(mergeAnswerChanges(readPending(), deduped));
+      writePending(sessionId, mergeAnswerChanges(readPending(sessionId), deduped));
       setSaveState("offline");
       return false;
     }
-  }, []);
+  }, [workspace?.session.id]);
 
   const flushQueued = useCallback(async () => {
     if (saveTimerRef.current) {
@@ -153,16 +185,20 @@ export default function AssessmentApp() {
     }
     const queued = [...queuedRef.current.values()];
     queuedRef.current.clear();
-    return persistAnswers(mergeAnswerChanges(readPending(), queued));
-  }, [persistAnswers]);
+    const sessionId = workspace?.session.id;
+    if (!sessionId) return true;
+    return persistAnswers(mergeAnswerChanges(readPending(sessionId), queued));
+  }, [persistAnswers, workspace?.session.id]);
 
   const queueAnswer = useCallback((item: AnswerChange) => {
+    const sessionId = workspace?.session.id;
+    if (!sessionId) return;
     queuedRef.current.set(item.questionId, item);
-    writePending(mergeAnswerChanges(readPending(), [item]));
+    writePending(sessionId, mergeAnswerChanges(readPending(sessionId), [item]));
     setSaveState("saving");
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => { void flushQueued(); }, SAVE_DEBOUNCE_MS);
-  }, [flushQueued]);
+  }, [flushQueued, workspace?.session.id]);
 
   useEffect(() => {
     if (stage !== "workspace") return;
@@ -175,9 +211,10 @@ export default function AssessmentApp() {
   useEffect(() => () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    const sessionId = workspace?.session.id;
     const queued = [...queuedRef.current.values()];
-    if (queued.length) writePending(mergeAnswerChanges(readPending(), queued));
-  }, []);
+    if (sessionId && queued.length) writePending(sessionId, mergeAnswerChanges(readPending(sessionId), queued));
+  }, [workspace?.session.id]);
 
   const cohorts = useMemo(() => [...new Set(awardees.map((awardee) => awardee.cohort).filter((value): value is string => Boolean(value)))].sort((a, b) => b.localeCompare(a)), [awardees]);
 
@@ -214,7 +251,6 @@ export default function AssessmentApp() {
   const pageQuestions = module?.questions.slice(pageIndex * PAGE_SIZE, (pageIndex + 1) * PAGE_SIZE) ?? [];
   const progress = workspace?.totalQuestions ? Math.round((answeredIds.size / workspace.totalQuestions) * 100) : 0;
   const missingCount = Math.max((workspace?.totalQuestions ?? 0) - answeredIds.size, 0);
-  const selectedCount = Object.entries(answers).filter(([id, selected]) => answeredIds.has(id) && selected).length;
   const pageReviewedCount = pageQuestions.filter((question) => answeredIds.has(question.id)).length;
 
   const toggleQuestion = (questionId: string) => {
@@ -225,11 +261,13 @@ export default function AssessmentApp() {
   };
 
   const clearAnswers = async (questionIds: string[]) => {
-    if (!questionIds.length) return true;
+    const sessionId = workspace?.session.id;
+    if (!sessionId || !questionIds.length) return true;
     setClearingId(questionIds.length === 1 ? questionIds[0] : "page");
     setError("");
     questionIds.forEach((id) => queuedRef.current.delete(id));
-    writePending(readPending().filter((item) => !questionIds.includes(item.questionId)));
+    writePending(sessionId, readPending(sessionId).filter((item) => !questionIds.includes(item.questionId)));
+
     try {
       const response = await fetch("/api/assessment/answers", {
         method: "DELETE",
@@ -278,6 +316,7 @@ export default function AssessmentApp() {
     setError("");
     await confirmCurrentPage();
     if (!module) { setBusy(false); return; }
+
     if (pageIndex + 1 < totalPages) {
       setPageIndex((value) => value + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -302,6 +341,7 @@ export default function AssessmentApp() {
         }
         throw new Error(data.error || "Assessment belum dapat diselesaikan.");
       }
+      clearPending(workspace?.session.id || "");
       setStage("complete");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Assessment belum dapat diselesaikan.");
@@ -345,8 +385,38 @@ export default function AssessmentApp() {
   const resetCurrentPage = async () => {
     const ids = pageQuestions.map((question) => question.id).filter((id) => answeredIds.has(id));
     if (!ids.length) return;
-    if (!window.confirm("Kosongkan jawaban pada halaman ini? Item akan kembali berstatus belum dijawab.")) return;
+    if (!window.confirm("Kosongkan jawaban pada halaman ini? Item akan kembali menjadi belum dijawab.")) return;
     await clearAnswers(ids);
+  };
+
+  const resetProgress = async () => {
+    if (!workspace || workspace.session.status !== "in_progress") return;
+    if (!window.confirm("Hapus seluruh progres assessment ini? Semua jawaban yang tersimpan akan dihapus dan progres kembali ke 0%.")) return;
+
+    setBusy(true);
+    setError("");
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    queuedRef.current.clear();
+    clearPending(workspace.session.id);
+
+    try {
+      const response = await fetch("/api/assessment/session", { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Progres belum dapat dihapus.");
+      const awardee = workspace.awardee;
+      setWorkspace(null);
+      setAnswers({});
+      setAnsweredIds(new Set());
+      setModuleIndex(0);
+      setPageIndex(0);
+      setLast4("");
+      setSelectedAwardee(awardee);
+      setStage("verify");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Progres belum dapat dihapus.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const resetAccess = async () => {
@@ -365,115 +435,125 @@ export default function AssessmentApp() {
   };
 
   if (stage === "loading") return (
-    <div className={styles.loading}>
-      <div className={styles.loadingMark}><span /></div>
-      <strong>Menyiapkan ruang refleksi</strong>
-      <p>Memuat progres dan menyambungkan autosave...</p>
-    </div>
+    <section className={styles.loading}>
+      <span className={styles.loadingLine} />
+      <h1>Menyiapkan ruang refleksi.</h1>
+      <p>Memuat progres terakhir dan menyambungkan penyimpanan otomatis.</p>
+    </section>
   );
 
   if (stage === "complete") return (
     <section className={styles.completeCard}>
-      <div className={styles.completeGlow} />
-      <div className={styles.completeIcon}>✓</div>
-      <span className={styles.kicker}>PERJALANAN REFLEKSI SELESAI</span>
-      <h1>Terima kasih, {workspace?.awardee.full_name?.split(" ")[0] || "Awardee"}.</h1>
-      <p>Jawabanmu sudah tersimpan. Hasil ini akan menjadi bahan percakapan pendampingan dan pengembangan bersama ETOS.</p>
-      <div className={styles.completeStats}><div><strong>92</strong><span>Pernyataan</span></div><div><strong>3</strong><span>Modul refleksi</span></div><div><strong>100%</strong><span>Tersimpan</span></div></div>
-      <div className={styles.confidential}>🔒 Jawaban pribadi hanya dapat diakses oleh pihak yang memiliki kewenangan.</div>
+      <span className={styles.kicker}>ASSESSMENT SELESAI</span>
+      <h1>Selesai.</h1>
+      <p>Terima kasih, {workspace?.awardee.full_name?.split(" ")[0] || "Awardee"}. Jawabanmu sudah tersimpan dan akan menjadi bahan pendampingan serta pengembangan bersama ETOS.</p>
+      <div className={styles.completeStats}><div><strong>92</strong><span>Pernyataan</span></div><div><strong>3</strong><span>Modul</span></div><div><strong>100%</strong><span>Tersimpan</span></div></div>
       <button type="button" className={styles.secondaryButton} onClick={resetAccess}>Keluar dari sesi</button>
     </section>
   );
 
   if (stage === "workspace" && workspace && module) return (
     <section className={styles.workspace}>
-      <div className={styles.workspaceTop}>
-        <div className={styles.workspaceIntro}>
-          <span className={styles.kicker}>{workspace.period.name}</span>
-          <h1>{module.title}</h1>
+      <div className={styles.workspaceHero}>
+        <div className={styles.heroTopline}>
+          <span>MODUL {String(moduleIndex + 1).padStart(2, "0")} / {String(workspace.modules.length).padStart(2, "0")}</span>
+          <button type="button" onClick={() => void resetProgress()} disabled={busy}>Hapus seluruh progres</button>
+        </div>
+        <div className={styles.workspaceHeading}>
+          <div><span className={styles.kicker}>{workspace.period.name}</span><h1>{module.title}</h1></div>
           <p>{module.reflection_question}</p>
         </div>
-        <div className={styles.userChip}><span>{workspace.awardee.full_name.slice(0, 1).toUpperCase()}</span><div><strong>{workspace.awardee.full_name}</strong><small>{[workspace.awardee.major, workspace.awardee.cohort].filter(Boolean).join(" • ")}</small></div></div>
-      </div>
-
-      <div className={styles.progressPanel}>
-        <div className={styles.progressSummary}>
-          <div><span>Progress keseluruhan</span><strong>{progress}%</strong></div>
-          <div className={styles.progressNumbers}><span><b>{answeredIds.size}</b> terkonfirmasi</span><span><b>{missingCount}</b> belum dijawab</span><span><b>{selectedCount}</b> dipilih</span></div>
+        <div className={styles.progressRow}>
+          <div className={styles.progressTrack}><span style={{ width: `${progress}%` }} /></div>
+          <strong>{progress}%</strong>
+          <small>{missingCount} belum dijawab</small>
         </div>
-        <div className={styles.progressTrack}><span style={{ width: `${progress}%` }} /></div>
-        {missingCount > 0 && <button type="button" className={styles.incompleteJump} onClick={() => void jumpToFirstIncomplete()}>Tinjau yang belum dijawab →</button>}
       </div>
 
-      <div className={styles.moduleNav}>{workspace.modules.map((item, index) => {
-        const completed = item.questions.filter((question) => answeredIds.has(question.id)).length;
-        const pct = Math.round((completed / Math.max(item.questions.length, 1)) * 100);
-        return <button type="button" key={item.id} onClick={() => void jumpToModule(index)} className={index === moduleIndex ? styles.moduleActive : pct === 100 ? styles.moduleDone : ""}><span>0{index + 1}</span><strong>{item.title}</strong><small>{pct}%</small></button>;
-      })}</div>
+      <div className={styles.workspaceBody}>
+        <div className={styles.identityLine}><strong>{workspace.awardee.full_name}</strong><span>{[workspace.awardee.major, workspace.awardee.cohort].filter(Boolean).join(" · ")}</span></div>
 
-      {module.is_restricted && <div className={styles.privateNotice}><div>🔐</div><p><strong>Ruang refleksi privat</strong><span>Jawaban di bagian ini dilindungi lebih ketat dan hanya digunakan untuk pendampingan yang berwenang.</span></p></div>}
+        <div className={styles.moduleNav}>{workspace.modules.map((item, index) => {
+          const completed = item.questions.filter((question) => answeredIds.has(question.id)).length;
+          const pct = Math.round((completed / Math.max(item.questions.length, 1)) * 100);
+          return <button type="button" key={item.id} onClick={() => void jumpToModule(index)} data-active={index === moduleIndex}><span>0{index + 1}</span><strong>{item.title}</strong><small>{pct}%</small></button>;
+        })}</div>
 
-      <div className={styles.questionHeader}>
-        <div><span>HALAMAN {pageIndex + 1} / {totalPages} · {pageReviewedCount}/{pageQuestions.length} DITINJAU</span><h2>Pilih yang paling menggambarkan dirimu.</h2><p>Tap kartu untuk memilih atau membatalkan pilihan. Kamu bisa kembali kapan saja sebelum assessment diselesaikan.</p></div>
-        <div className={`${styles.saveState} ${saveState === "offline" ? styles.saveOffline : ""}`}><i />{saveState === "saving" ? "Menyimpan perubahan" : saveState === "saved" ? "Semua perubahan tersimpan" : saveState === "offline" ? "Offline · aman di perangkat" : "Autosave aktif"}</div>
-      </div>
+        {module.is_restricted && <div className={styles.privateNotice}><strong>Ruang refleksi privat</strong><span>Jawaban pada bagian ini memiliki perlindungan akses lebih tinggi dan hanya digunakan untuk pendampingan yang berwenang.</span></div>}
 
-      <div className={styles.questionList}>{pageQuestions.map((question) => {
-        const reviewed = answeredIds.has(question.id);
-        const checked = reviewed && Boolean(answers[question.id]);
-        return <article key={question.id} className={`${styles.questionCard} ${checked ? styles.questionSelected : reviewed ? styles.questionReviewed : ""}`}>
-          <button type="button" className={styles.questionMain} onClick={() => toggleQuestion(question.id)} aria-pressed={checked}>
-            <span className={styles.checkBox}>{checked ? "✓" : ""}</span>
-            <span className={styles.questionCode}>{question.code}</span>
-            <span className={styles.questionText}>{question.statement}</span>
-          </button>
-          <div className={styles.questionFoot}>
-            <span data-state={checked ? "selected" : reviewed ? "reviewed" : "empty"}>{checked ? "Dipilih" : reviewed ? "Tidak dipilih" : "Belum ditinjau"}</span>
-            {reviewed && <button type="button" onClick={() => void clearAnswers([question.id])} disabled={clearingId === question.id}>{clearingId === question.id ? "Mengosongkan..." : "Kosongkan jawaban"}</button>}
-          </div>
-        </article>;
-      })}</div>
+        <div className={styles.questionHeader}>
+          <div><span>HALAMAN {pageIndex + 1} DARI {totalPages}</span><h2>Pilih pernyataan yang paling menggambarkan dirimu.</h2><p>Kamu bebas kembali, mengubah pilihan, atau mengosongkan jawaban sebelum assessment diselesaikan.</p></div>
+          <div className={styles.saveState} data-state={saveState}>{saveState === "saving" ? "Menyimpan perubahan" : saveState === "saved" ? "Tersimpan" : saveState === "offline" ? "Offline · tersimpan di perangkat" : "Autosave aktif"}</div>
+        </div>
 
-      {error && <div className={styles.errorBox}>{error}</div>}
+        <div className={styles.questionList}>{pageQuestions.map((question) => {
+          const reviewed = answeredIds.has(question.id);
+          const checked = reviewed && Boolean(answers[question.id]);
+          return <article key={question.id} className={`${styles.questionCard} ${checked ? styles.questionSelected : reviewed ? styles.questionReviewed : ""}`}>
+            <button type="button" className={styles.questionMain} onClick={() => toggleQuestion(question.id)} aria-pressed={checked}>
+              <span className={styles.selector}><i /></span>
+              <span className={styles.questionText}>{question.statement}</span>
+            </button>
+            <div className={styles.questionFoot}>
+              <span>{checked ? "Dipilih" : reviewed ? "Tidak dipilih" : "Belum ditinjau"}</span>
+              {reviewed && <button type="button" onClick={() => void clearAnswers([question.id])} disabled={clearingId === question.id}>{clearingId === question.id ? "Mengosongkan..." : "Kosongkan"}</button>}
+            </div>
+          </article>;
+        })}</div>
 
-      <div className={styles.pageTools}>
-        <div><strong>Butuh memperbaiki?</strong><span>Kembali ke halaman sebelumnya, hapus centang, atau kosongkan jawaban agar kembali menjadi belum dijawab.</span></div>
-        <button type="button" onClick={() => void resetCurrentPage()} disabled={pageReviewedCount === 0 || clearingId === "page"}>{clearingId === "page" ? "Mengosongkan..." : "Reset jawaban halaman"}</button>
-      </div>
+        {error && <div className={styles.errorBox}>{error}</div>}
 
-      <div className={styles.actions}>
-        <button type="button" className={styles.secondaryButton} onClick={() => void previous()} disabled={moduleIndex === 0 && pageIndex === 0}>← Kembali</button>
-        <div className={styles.actionHint}><span>{pageReviewedCount}/{pageQuestions.length}</span><small>item ditinjau</small></div>
-        <button type="button" className={styles.primaryButton} disabled={busy} onClick={next}>{busy ? "Menyimpan..." : moduleIndex === workspace.modules.length - 1 && pageIndex === totalPages - 1 ? "Selesaikan assessment ✓" : "Simpan & lanjut →"}</button>
+        <div className={styles.reviewBar}>
+          <div><strong>{pageReviewedCount}/{pageQuestions.length}</strong><span>pernyataan pada halaman ini sudah ditinjau</span></div>
+          <div className={styles.reviewActions}>{missingCount > 0 && <button type="button" onClick={() => void jumpToFirstIncomplete()}>Cari yang belum dijawab</button>}<button type="button" onClick={() => void resetCurrentPage()} disabled={pageReviewedCount === 0 || clearingId === "page"}>{clearingId === "page" ? "Mengosongkan..." : "Reset halaman"}</button></div>
+        </div>
+
+        <div className={styles.actions}>
+          <button type="button" className={styles.secondaryButton} onClick={() => void previous()} disabled={moduleIndex === 0 && pageIndex === 0}>Kembali</button>
+          <button type="button" className={styles.primaryButton} disabled={busy} onClick={next}>{busy ? "Menyimpan..." : moduleIndex === workspace.modules.length - 1 && pageIndex === totalPages - 1 ? "Selesaikan assessment" : "Simpan & lanjut"}</button>
+        </div>
       </div>
     </section>
   );
 
   if (stage === "verify" && selectedAwardee) return (
     <section className={styles.verifyCard}>
-      <div className={styles.cardAccent} />
-      <button type="button" className={styles.backLink} onClick={() => { setStage("select"); setError(""); setLast4(""); }}>← Ganti awardee</button>
-      <div className={styles.verifyIdentity}><span className={styles.verifyAvatar}>{selectedAwardee.full_name.slice(0, 1).toUpperCase()}</span><div><span className={styles.kicker}>VERIFIKASI IDENTITAS</span><h1>{selectedAwardee.full_name}</h1><p>{[selectedAwardee.campus, selectedAwardee.major, selectedAwardee.cohort].filter(Boolean).join(" • ")}</p></div></div>
+      <div className={styles.verifyIntro}>
+        <button type="button" className={styles.backLink} onClick={() => { setStage("select"); setError(""); setLast4(""); }}>Ganti awardee</button>
+        <span className={styles.kicker}>VERIFIKASI IDENTITAS</span>
+        <h1>{selectedAwardee.full_name}</h1>
+        <p>{[selectedAwardee.campus, selectedAwardee.major, selectedAwardee.cohort].filter(Boolean).join(" · ")}</p>
+      </div>
       <form onSubmit={(event) => { event.preventDefault(); void verify(); }} className={styles.verifyForm}>
-        <label className={styles.codeLabel}><span>Masukkan 4 digit terakhir WhatsApp</span><small>Contoh: 08•• •••• <b>1234</b></small><input autoFocus inputMode="numeric" enterKeyHint="go" autoComplete="one-time-code" maxLength={4} value={last4} onChange={(event) => setLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="••••" aria-label="4 digit terakhir nomor WhatsApp" /></label>
-        <div className={styles.verifyTips}><span>🔒 Hanya 4 digit</span><span>⚡ Verifikasi cepat</span><span>✓ Maks. 5 percobaan</span></div>
-        <small className={styles.privacyText}>Nomor WhatsApp lengkap tidak ditampilkan dan tidak dikirim kembali ke browser.</small>
+        <div><span className={styles.formEyebrow}>LANGKAH TERAKHIR</span><h2>Masukkan 4 digit terakhir WhatsApp.</h2><p>Digunakan hanya untuk memastikan bahwa assessment dibuka oleh awardee yang benar.</p></div>
+        <div className={styles.digitField}>
+          <input autoFocus inputMode="numeric" enterKeyHint="go" autoComplete="one-time-code" maxLength={4} value={last4} onChange={(event) => setLast4(event.target.value.replace(/\D/g, "").slice(0, 4))} aria-label="4 digit terakhir nomor WhatsApp" />
+          <div className={styles.digitBoxes} aria-hidden="true">{[0, 1, 2, 3].map((index) => <span key={index} data-filled={Boolean(last4[index])}>{last4[index] || ""}</span>)}</div>
+        </div>
         {error && <div className={styles.errorBox}>{error}</div>}
-        <button type="submit" className={styles.primaryButton} disabled={busy || last4.length !== 4}>{busy ? "Memverifikasi..." : "Verifikasi & mulai →"}</button>
+        <button type="submit" className={styles.primaryButton} disabled={busy || last4.length !== 4}>{busy ? "Memverifikasi..." : "Verifikasi & mulai"}</button>
+        <small className={styles.privacyText}>Nomor WhatsApp lengkap tidak ditampilkan dan tidak dikirim kembali ke browser.</small>
       </form>
     </section>
   );
 
   return (
     <section className={styles.selectCard}>
-      <div className={styles.cardAccent} />
-      <div className={styles.selectHero}><div><span className={styles.kicker}>MULAI PERJALANAN REFLEKSI</span><h1>Temukan namamu.</h1><p>Pilih identitasmu, verifikasi 4 digit WhatsApp, lalu lanjutkan assessment dengan tenang. Progres tersimpan otomatis.</p></div><div className={styles.selectBadge}><strong>{awardees.length}</strong><span>Awardee aktif</span></div></div>
-      <label className={styles.searchBox}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari nama atau jurusan..." /></label>
-      {cohorts.length > 0 && <div className={styles.filterChips}><button type="button" data-active={cohortFilter === "all"} onClick={() => setCohortFilter("all")}>Semua</button>{cohorts.map((cohort) => <button type="button" key={cohort} data-active={cohortFilter === cohort} onClick={() => setCohortFilter(cohort)}>Angkatan {cohort}</button>)}</div>}
-      <div className={styles.listMeta}><span>Menampilkan {filteredAwardees.length} awardee</span>{(query || cohortFilter !== "all") && <button type="button" onClick={() => { setQuery(""); setCohortFilter("all"); }}>Reset filter</button>}</div>
-      {error && <div className={styles.errorBox}>{error}</div>}
-      <div className={styles.awardeeList}>{filteredAwardees.length ? filteredAwardees.map((awardee) => <button type="button" key={awardee.id} className={styles.awardeeRow} onClick={() => { setSelectedAwardee(awardee); setStage("verify"); setError(""); }}><span className={styles.avatar}>{awardee.full_name.slice(0, 1).toUpperCase()}</span><span className={styles.awardeeInfo}><strong>{awardee.full_name}</strong><small>{[awardee.major, awardee.campus].filter(Boolean).join(" • ") || "Awardee ETOS"}</small><em>{awardee.cohort ? `Angkatan ${awardee.cohort}` : "ETOS"}</em></span><b>→</b></button>) : <div className={styles.emptyState}><strong>Tidak ada awardee yang cocok</strong><span>Coba ubah kata kunci atau reset filter angkatan.</span></div>}</div>
-      <div className={styles.securityFoot}><span>🔒</span><p><strong>Privasi sebagai default.</strong> Jawaban tersimpan ke ETOS Assessment Center dan aksesnya dibatasi berdasarkan kewenangan pendamping.</p></div>
+      <div className={styles.entryIntro}>
+        <span className={styles.kicker}>ETOS AWARDEE DEVELOPMENT</span>
+        <h1>Kenali diri.<br /><em>Tentukan arah.</em></h1>
+        <p>Mulai assessment dengan tenang. Progres tersimpan otomatis dan dapat kamu perbaiki kapan saja sebelum diselesaikan.</p>
+        <div className={styles.entryMeta}><span>3 modul</span><span>92 pernyataan</span><span>Autosave</span></div>
+      </div>
+      <div className={styles.directoryPanel}>
+        <div className={styles.directoryHeading}><span>MULAI ASSESSMENT</span><h2>Temukan namamu.</h2></div>
+        <input className={styles.searchBox} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari nama atau jurusan" />
+        {cohorts.length > 0 && <div className={styles.filterChips}><button type="button" data-active={cohortFilter === "all"} onClick={() => setCohortFilter("all")}>Semua</button>{cohorts.map((cohort) => <button type="button" key={cohort} data-active={cohortFilter === cohort} onClick={() => setCohortFilter(cohort)}>{cohort}</button>)}</div>}
+        <div className={styles.listMeta}><span>{filteredAwardees.length} awardee</span>{(query || cohortFilter !== "all") && <button type="button" onClick={() => { setQuery(""); setCohortFilter("all"); }}>Reset filter</button>}</div>
+        {error && <div className={styles.errorBox}>{error}</div>}
+        <div className={styles.awardeeList}>{filteredAwardees.length ? filteredAwardees.map((awardee) => <button type="button" key={awardee.id} className={styles.awardeeRow} onClick={() => { setSelectedAwardee(awardee); setStage("verify"); setError(""); }}><span className={styles.avatar}>{awardee.full_name.slice(0, 1).toUpperCase()}</span><span className={styles.awardeeInfo}><strong>{awardee.full_name}</strong><small>{[awardee.major, awardee.campus].filter(Boolean).join(" · ") || "Awardee ETOS"}</small></span><span className={styles.rowAction}>Lanjut</span></button>) : <div className={styles.emptyState}><strong>Tidak ada awardee yang cocok.</strong><span>Coba ubah kata kunci atau filter angkatan.</span></div>}</div>
+        <p className={styles.securityFoot}>Jawaban tersimpan secara privat dan akses internal dibatasi berdasarkan kewenangan pendamping.</p>
+      </div>
     </section>
   );
 }
