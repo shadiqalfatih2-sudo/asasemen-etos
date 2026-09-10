@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ETOS Assessment Center",
-  description: "Assessment perkembangan awardee ETOS untuk pendampingan yang lebih personal.",
+  title: "ETOS Palu Assessment Center",
+  description: "Assessment perkembangan awardee ETOS Palu untuk pendampingan yang lebih personal.",
   icons: {
     icon: "/etos-favicon.png",
     shortcut: "/etos-favicon.png",

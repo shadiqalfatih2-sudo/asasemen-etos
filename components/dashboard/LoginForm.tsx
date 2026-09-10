@@ -12,15 +12,23 @@ export default function LoginForm() {
   return (
     <form className={`login-form ${styles.form}`} action={formAction}>
       <label>
-        Email
-        <input name="email" type="email" placeholder="nama@etos.id" autoComplete="email" required />
-      </label>
-      <label>
-        Password
-        <input name="password" type="password" placeholder="••••••••" autoComplete="current-password" minLength={6} required />
+        PIN Superadmin
+        <input
+          className={styles.pinInput}
+          name="pin"
+          type="password"
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          pattern="[0-9]{6}"
+          minLength={6}
+          maxLength={6}
+          placeholder="••••••"
+          aria-label="PIN Superadmin 6 digit"
+          required
+        />
       </label>
       {state.error && <div className={styles.error} role="alert">{state.error}</div>}
-      <button type="submit" disabled={pending}>{pending ? "Memverifikasi..." : "Masuk ke Dashboard"}</button>
+      <button type="submit" disabled={pending}>{pending ? "Memverifikasi PIN..." : "Masuk sebagai Superadmin"}</button>
     </form>
   );
 }

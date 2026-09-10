@@ -15,8 +15,11 @@ const NAV_ITEMS = [
 export default function InternalShell({ profile, active, children }: { profile: InternalProfile; active: "overview" | "awardees" | "assessments" | "reports" | "settings" | "users" | "assessment"; children?: ReactNode }) {
   return <main className={styles.shell}>
     <header className={styles.topbar}>
-      <Link href="/dashboard" className={styles.brand} aria-label="ETOS Assessment Center">
-        <Image className={styles.brandLogo} src="/etos-logo.webp" alt="ETOS" width={136} height={43} priority />
+      <Link href="/dashboard" className={styles.brand} aria-label="ETOS Palu Assessment Center">
+        <span className="brand-lockup brand-lockup-compact">
+          <Image className={styles.brandLogo} src="/etos-logo.webp" alt="ETOS" width={136} height={43} priority />
+          <span className="brand-region">Palu</span>
+        </span>
         <small>Assessment Center</small>
       </Link>
       <div className={styles.user}>

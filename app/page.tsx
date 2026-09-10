@@ -7,8 +7,11 @@ export default function HomePage() {
     <main className="site-home">
       <section className="hero-shell">
         <nav className="nav-wrap">
-          <Link href="/" className="brand-mark brand-mark-light" aria-label="ETOS Assessment Center">
-            <Image className="brand-logo brand-logo-light" src="/etos-logo.webp" alt="ETOS" width={168} height={53} priority />
+          <Link href="/" className="brand-mark brand-mark-light" aria-label="ETOS Palu Assessment Center">
+            <span className="brand-lockup">
+              <Image className="brand-logo brand-logo-light" src="/etos-logo.webp" alt="ETOS" width={168} height={53} priority />
+              <span className="brand-region">Palu</span>
+            </span>
             <small>Assessment Center</small>
           </Link>
           <div className="nav-links"><a href="#alur">Cara kerja</a><a href="#privasi">Privasi</a></div>
@@ -17,7 +20,7 @@ export default function HomePage() {
 
         <div className="hero-stage">
           <div className="hero-note">
-            <span>ETOS AWARDEE DEVELOPMENT</span>
+            <span>ETOS AWARDEE DEVELOPMENT · PALU</span>
             <p>Ruang refleksi terarah untuk memahami diri, melihat pola perkembangan, dan menentukan langkah berikutnya.</p>
           </div>
           <div className="hero-cta">
@@ -42,7 +45,7 @@ export default function HomePage() {
       </section>
 
       <section className="principles" id="privasi">
-        <div className="principles-intro"><span>ASSESSMENT CENTER</span><h2>Refleksi yang tenang, privat, dan bisa ditindaklanjuti.</h2></div>
+        <div className="principles-intro"><span>ETOS PALU · ASSESSMENT CENTER</span><h2>Refleksi yang tenang, privat, dan bisa ditindaklanjuti.</h2></div>
         <div className="principles-grid">
           <article><span>01</span><h3>Bukan label</h3><p>Hasil digunakan sebagai bahan percakapan pengembangan, bukan diagnosis atau penilaian psikologis.</p></article>
           <article><span>02</span><h3>Privasi lebih dulu</h3><p>Jawaban sensitif hanya tersedia untuk pendamping yang memiliki kewenangan khusus.</p></article>

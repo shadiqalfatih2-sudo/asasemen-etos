@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { getInternalUser } from "@/lib/internal/auth";
 
 type ApiProfile = {
   id: string;
@@ -10,22 +10,13 @@ type ApiProfile = {
 };
 
 async function getApiActor() {
-  const supabase = await createClient();
-  const { data: claimsData, error } = await supabase.auth.getClaims();
-  const subject = typeof claimsData?.claims?.sub === "string" ? claimsData.claims.sub : null;
+  const auth = await getInternalUser();
+  if (!auth) return { ok: false as const, status: 401, error: "Login diperlukan." };
 
-  if (error || !subject) return { ok: false as const, status: 401, error: "Login diperlukan." };
+  const profile = auth.profile as ApiProfile;
+  if (!profile.is_active) return { ok: false as const, status: 403, error: "Akun internal tidak aktif." };
 
-  const { data: rawProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("id,role,permissions,is_active")
-    .eq("id", subject)
-    .maybeSingle();
-
-  if (profileError || !rawProfile?.is_active) return { ok: false as const, status: 403, error: "Akun internal tidak aktif." };
-
-  const profile = { ...rawProfile, permissions: Array.isArray(rawProfile.permissions) ? rawProfile.permissions : [] } as ApiProfile;
-  return { ok: true as const, actorId: subject, supabase, profile };
+  return { ok: true as const, actorId: profile.id, supabase: auth.supabase, profile };
 }
 
 export async function authorizeAssessmentManager() {

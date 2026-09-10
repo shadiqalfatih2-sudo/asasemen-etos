@@ -13,17 +13,20 @@ export default async function FacilitatorLoginPage() {
   return (
     <main className="login-shell">
       <section className="login-card">
-        <Link href="/" className="brand-mark" aria-label="ETOS Assessment Center">
-          <Image className="brand-logo brand-logo-login" src="/etos-logo.webp" alt="ETOS" width={178} height={56} priority />
+        <Link href="/" className="brand-mark" aria-label="ETOS Palu Assessment Center">
+          <span className="brand-lockup">
+            <Image className="brand-logo brand-logo-login" src="/etos-logo.webp" alt="ETOS" width={178} height={56} priority />
+            <span className="brand-region">Palu</span>
+          </span>
           <small>Assessment Center</small>
         </Link>
         <div>
-          <span className="eyebrow">AREA INTERNAL</span>
-          <h1>Login Fasilitator</h1>
-          <p>Masuk menggunakan akun internal ETOS. Akses data otomatis mengikuti role, assignment, dan permission.</p>
+          <span className="eyebrow">AKSES SUPERADMIN</span>
+          <h1>Masuk dengan PIN.</h1>
+          <p>Gunakan PIN 6 digit untuk membuka Dashboard ETOS Palu. Tidak perlu email atau password terpisah.</p>
         </div>
         <LoginForm />
-        <small>Assessment sensitif hanya dapat dibuka oleh akun yang memiliki izin khusus.</small>
+        <small>Sesi Superadmin disimpan aman pada perangkat ini dan akan berakhir otomatis.</small>
       </section>
     </main>
   );
