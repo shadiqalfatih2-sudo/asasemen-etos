@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./hero-responsive.css";
 
 export const metadata: Metadata = {
   title: "ETOS Palu Assessment Center",
