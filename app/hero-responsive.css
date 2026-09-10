@@ -9,7 +9,11 @@
 .hero-display h1 em{display:block;margin-left:clamp(72px,9vw,138px);font-size:.9em;line-height:.88;white-space:nowrap}
 .hero-modules{margin-top:0}
 .hero-modules article{padding-top:17px;padding-bottom:17px}
-.principles{padding-top:50px}
+.principles{padding:clamp(104px,8.5vw,132px) 0 96px}
+.principles-intro{grid-template-columns:minmax(180px,.32fr) minmax(0,1fr);gap:clamp(54px,7vw,96px);align-items:start}
+.principles-intro>span{padding-top:10px}
+.principles-intro h2{max-width:760px;font-size:clamp(40px,4.6vw,62px);line-height:1.02;text-wrap:balance}
+.principles-grid{margin-top:76px}
 .brand-lockup{display:inline-flex;flex-direction:column;align-items:flex-start;line-height:1}
 .brand-region{margin-top:1px;padding-left:3px;font-size:9px;line-height:1;font-weight:800;letter-spacing:.32em;text-transform:uppercase}
 
@@ -18,7 +22,9 @@
   .hero-display{padding:50px 0 54px}
   .hero-display h1{font-size:clamp(78px,9.1vw,112px)}
   .hero-display h1 em{margin-left:clamp(52px,7vw,86px);font-size:.88em}
-  .principles{padding-top:46px}
+  .principles{padding-top:96px}
+  .principles-intro{gap:56px}
+  .principles-intro h2{max-width:700px;font-size:clamp(42px,5vw,58px)}
 }
 
 @media (min-width:901px) and (max-height:820px){
@@ -28,7 +34,7 @@
   .hero-display h1{font-size:clamp(72px,8.35vw,118px)}
   .hero-display h1 em{font-size:.87em;margin-left:clamp(44px,6.5vw,94px)}
   .hero-modules article{padding-top:14px;padding-bottom:14px}
-  .principles{padding-top:38px}
+  .principles{padding-top:78px}
 }
 
 @media (max-width:900px){
@@ -39,7 +45,11 @@
   .hero-display{padding:46px 0 50px}
   .hero-display h1{font-size:clamp(60px,11vw,86px);line-height:.88;letter-spacing:-.05em}
   .hero-display h1 em{margin-left:0;font-size:.82em;line-height:.94;white-space:nowrap}
-  .principles{padding-top:44px}
+  .principles{padding-top:86px}
+  .principles-intro{grid-template-columns:1fr;gap:22px}
+  .principles-intro>span{padding-top:0}
+  .principles-intro h2{max-width:680px;font-size:clamp(40px,7vw,58px);line-height:1.03}
+  .principles-grid{margin-top:62px}
 }
 
 @media (max-width:600px){
@@ -52,7 +62,10 @@
   .hero-display h1{font-size:clamp(48px,14.8vw,72px);line-height:.9;letter-spacing:-.055em}
   .hero-display h1 em{font-size:.82em;line-height:.96}
   .hero-modules article{padding-top:14px;padding-bottom:14px}
-  .principles{padding-top:38px}
+  .principles{padding:68px 0 76px}
+  .principles-intro{gap:18px}
+  .principles-intro h2{font-size:clamp(36px,10.5vw,50px);line-height:1.04;letter-spacing:-.04em}
+  .principles-grid{margin-top:48px}
   .brand-logo{width:122px}
   .brand-region{font-size:7px;letter-spacing:.3em;padding-left:2px}
 }
@@ -62,7 +75,7 @@
   .hero-display h1{font-size:clamp(45px,14.3vw,54px)}
   .hero-display h1 em{font-size:.8em}
   .hero-cta a{padding:13px 20px}
-  .principles{padding-top:34px}
+  .principles{padding-top:60px}
 }
 
 @media (orientation:portrait) and (min-width:601px) and (max-width:900px){
@@ -71,5 +84,5 @@
   .hero-display{padding-top:58px;padding-bottom:54px}
   .hero-display h1{font-size:clamp(68px,11.2vw,88px)}
   .hero-display h1 em{font-size:.81em}
-  .principles{padding-top:46px}
+  .principles{padding-top:94px}
 }
