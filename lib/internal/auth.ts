@@ -24,6 +24,10 @@ export function canExportAssessments(profile: InternalProfile) {
   return profile.role === "superadmin" || profile.permissions.includes("assessment.export");
 }
 
+export function canManageUsers(profile: InternalProfile) {
+  return profile.role === "superadmin";
+}
+
 export async function getInternalUser() {
   const supabase = await createClient();
   const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
@@ -40,11 +44,7 @@ export async function getInternalUser() {
 
   if (profileError || !profile?.is_active) return null;
 
-  return {
-    supabase,
-    claims,
-    profile: profile as InternalProfile,
-  };
+  return { supabase, claims, profile: profile as InternalProfile };
 }
 
 export async function requireInternalUser() {
